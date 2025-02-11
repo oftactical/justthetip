@@ -24,7 +24,7 @@ const client = new Client({
 });
 
 // ✅ Construct StreamElements API URL dynamically
-const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/${process.env.STREAM_ELEMENTS_CHANNEL_ID}/leaderboard`;
+const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/${STREAMLABS_CHANNEL_ID}/leaderboard`;
 
 let leaderboardChannelId = process.env.LEADERBOARD_CHANNEL_ID;
 let updateInterval = 15 * 60 * 1000; // Default: 15 minutes
