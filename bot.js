@@ -54,7 +54,7 @@ async function fetchLeaderboard() {
             message += `\n**#${index + 1}** - ${entry.username}: $${entry.amount.toFixed(2)}`;
         });
 
-        message += `\n\n🌟 [Donate Here](${process.env.DONATION_LINK})`;
+        message += `\n\n🌟 [Click to Tip!](${process.env.DONATION_LINK})`;
         return message;
     } catch (error) {
         console.error("❌ Error fetching leaderboard:", error.response?.data || error.message);
