@@ -1,6 +1,12 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
+const express = require("express");
+
+// ✅ Express web server for UptimeRobot monitoring
+const app = express();
+app.get("/", (req, res) => res.send("Leaderboard Bot is running!"));
+app.listen(3000, () => console.log("✅ Keep-alive server running on port 3000"));
 
 // ✅ Logging environment variables to confirm they are loaded
 console.log("🔍 Checking environment variables...");
@@ -14,7 +20,7 @@ if (!process.env.DISCORD_BOT_TOKEN || !process.env.STREAM_ELEMENTS_CHANNEL_ID ||
     process.exit(1);
 }
 
-// ✅ Ensure proper intents for Discord bot
+// ✅ Initialize Discord bot with correct intents
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -24,11 +30,13 @@ const client = new Client({
 });
 
 // ✅ Construct StreamElements API URL dynamically
+const STREAM_ELEMENTS_CHANNEL_ID = process.env.STREAM_ELEMENTS_CHANNEL_ID.trim(); // Ensure no extra spaces or `=`
 const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/678d81945b43e4feb515e179/leaderboard`;
 
 let leaderboardChannelId = process.env.LEADERBOARD_CHANNEL_ID;
 let updateInterval = 15 * 60 * 1000; // Default: 15 minutes
 let updateIntervalId = null;
+let lastLeaderboardMessage = ""; // Store last leaderboard message to prevent duplicate updates
 
 // ✅ Function to fetch leaderboard data from StreamElements
 async function fetchLeaderboard() {
@@ -46,7 +54,7 @@ async function fetchLeaderboard() {
             message += `\n**#${index + 1}** - ${entry.username}: $${entry.amount.toFixed(2)}`;
         });
 
-        message += `\n\n🌟 Click to Tip: ${process.env.DONATION_LINK}`;
+        message += `\n\n🌟 [Donate Here](${process.env.DONATION_LINK})`;
         return message;
     } catch (error) {
         console.error("❌ Error fetching leaderboard:", error.response?.data || error.message);
@@ -54,7 +62,7 @@ async function fetchLeaderboard() {
     }
 }
 
-// ✅ Function to update leaderboard message
+// ✅ Function to update leaderboard message in Discord
 async function updateLeaderboardMessage() {
     try {
         const channel = await client.channels.fetch(leaderboardChannelId);
@@ -65,14 +73,21 @@ async function updateLeaderboardMessage() {
 
         const messages = await channel.messages.fetch({ limit: 1 });
         const lastMessage = messages.first();
-
         const leaderboardMessage = await fetchLeaderboard();
+
+        // ✅ Prevent duplicate updates if leaderboard hasn't changed
+        if (leaderboardMessage === lastLeaderboardMessage) {
+            console.log("✅ Leaderboard unchanged, skipping update.");
+            return;
+        }
+
         if (lastMessage) {
             await lastMessage.edit(leaderboardMessage);
         } else {
             await channel.send(leaderboardMessage);
         }
 
+        lastLeaderboardMessage = leaderboardMessage; // ✅ Save last message to prevent redundant updates
         console.log("✅ Leaderboard updated!");
     } catch (error) {
         console.error("❌ Failed to update leaderboard:", error.message);
@@ -87,7 +102,7 @@ client.once("ready", async () => {
     updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
 });
 
-// ✅ Handle commands dynamically using environment variables
+// ✅ Handle commands dynamically
 client.on("messageCreate", async (message) => {
     if (!message.content.startsWith("!")) return;
 
