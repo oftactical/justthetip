@@ -3,24 +3,21 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 const axios = require("axios");
 const express = require("express");
 
-// ✅ Express web server for UptimeRobot monitoring
+// ✅ Express Web Server (For UptimeRobot)
 const app = express();
-app.get("/", (req, res) => res.send("Leaderboard Bot is running!"));
+app.get("/", (req, res) => res.send("TheTipBot is running!"));
 app.listen(3000, () => console.log("✅ Keep-alive server running on port 3000"));
 
-// ✅ Logging environment variables
+// ✅ Validate Environment Variables
 console.log("🔍 Checking environment variables...");
-["DISCORD_BOT_TOKEN", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK"].forEach((varName) => {
-    console.log(`${varName}:`, process.env[varName] ? "✅ Loaded" : "❌ Missing");
+["DISCORD_BOT_TOKEN", "CLIENT_ID", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK"].forEach((varName) => {
+    if (!process.env[varName]) {
+        console.error(`❌ ERROR: Missing environment variable: ${varName}`);
+        process.exit(1);
+    }
 });
 
-// ✅ Exit if required environment variables are missing
-if (!process.env.DISCORD_BOT_TOKEN || !process.env.STREAM_ELEMENTS_CHANNEL_ID || !process.env.LEADERBOARD_CHANNEL_ID) {
-    console.error("❌ Missing required environment variables. Exiting...");
-    process.exit(1);
-}
-
-// ✅ Initialize Discord Bot
+// ✅ Initialize Discord Client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 // ✅ Define Slash Commands
@@ -30,13 +27,19 @@ const commands = [
     new SlashCommandBuilder().setName("help").setDescription("Show all available leaderboard commands"),
 ].map(command => command.toJSON());
 
-// ✅ Register Slash Commands with Discord API
+// ✅ Register Slash Commands
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
 
 async function registerCommands() {
     try {
         console.log("⏳ Registering slash commands...");
-        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+        const clientId = process.env.CLIENT_ID;
+        
+        if (!clientId) {
+            throw new Error("❌ CLIENT_ID is missing! Check your Railway environment variables.");
+        }
+
+        await rest.put(Routes.applicationCommands(clientId), { body: commands });
         console.log("✅ Slash commands registered successfully!");
     } catch (error) {
         console.error("❌ Failed to register slash commands:", error);
@@ -44,13 +47,12 @@ async function registerCommands() {
 }
 
 // ✅ Construct StreamElements API URL
-const STREAM_ELEMENTS_CHANNEL_ID = process.env.STREAM_ELEMENTS_CHANNEL_ID.trim();
-const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/678d81945b43e4feb515e179/leaderboard`;
+const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/${process.env.STREAM_ELEMENTS_CHANNEL_ID}/leaderboard`;
 
 let leaderboardChannelId = process.env.LEADERBOARD_CHANNEL_ID;
 let updateInterval = 15 * 60 * 1000; // Default: 15 minutes
 let updateIntervalId = null;
-let lastLeaderboardMessage = ""; // Prevent duplicate updates
+let lastLeaderboardMessage = "";
 
 // ✅ Function to Fetch Leaderboard Data
 async function fetchLeaderboard() {
@@ -68,7 +70,7 @@ async function fetchLeaderboard() {
             message += `\n**#${index + 1}** - ${entry.username}: $${entry.amount.toFixed(2)}`;
         });
 
-        message += `\n\n🌟 [Click to Tip](${process.env.DONATION_LINK})`;
+        message += `\n\n🌟 [Donate Here](${process.env.DONATION_LINK})`;
         return message;
     } catch (error) {
         console.error("❌ Error fetching leaderboard:", error.response?.data || error.message);
@@ -107,7 +109,7 @@ async function updateLeaderboardMessage() {
     }
 }
 
-// ✅ Handle Slash Command Interactions
+// ✅ Handle Slash Commands
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isCommand()) return;
 
