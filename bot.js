@@ -3,14 +3,17 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 const axios = require("axios");
 const express = require("express");
 
-// ✅ Express Web Server (For UptimeRobot)
+// ✅ Keep-Alive Server for UptimeRobot Monitoring
 const app = express();
 app.get("/", (req, res) => res.send("TheTipBot is running!"));
 app.listen(3000, () => console.log("✅ Keep-alive server running on port 3000"));
 
+// ✅ Manually Set Client ID Here (If Railway isn't loading it)
+const CLIENT_ID = "1338745908841414787"; // Replace with your actual bot's CLIENT ID
+
 // ✅ Validate Environment Variables
 console.log("🔍 Checking environment variables...");
-["DISCORD_BOT_TOKEN", "CLIENT_ID", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK"].forEach((varName) => {
+["DISCORD_BOT_TOKEN", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK"].forEach((varName) => {
     if (!process.env[varName]) {
         console.error(`❌ ERROR: Missing environment variable: ${varName}`);
         process.exit(1);
@@ -27,19 +30,17 @@ const commands = [
     new SlashCommandBuilder().setName("help").setDescription("Show all available leaderboard commands"),
 ].map(command => command.toJSON());
 
-// ✅ Register Slash Commands
+// ✅ Register Slash Commands with Discord API
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
 
 async function registerCommands() {
     try {
         console.log("⏳ Registering slash commands...");
-        const clientId = process.env.CLIENT_ID;
-        
-        if (!clientId) {
-            throw new Error("❌ CLIENT_ID is missing! Check your Railway environment variables.");
+        if (!CLIENT_ID) {
+            throw new Error("❌ CLIENT_ID is missing! Set it manually in bot.js.");
         }
 
-        await rest.put(Routes.applicationCommands(clientId), { body: commands });
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
         console.log("✅ Slash commands registered successfully!");
     } catch (error) {
         console.error("❌ Failed to register slash commands:", error);
@@ -70,7 +71,7 @@ async function fetchLeaderboard() {
             message += `\n**#${index + 1}** - ${entry.username}: $${entry.amount.toFixed(2)}`;
         });
 
-        message += `\n\n🌟 [Click TO Tip](${process.env.DONATION_LINK})`;
+        message += `\n\n🌟 [Click To Tip](${process.env.DONATION_LINK})`;
         return message;
     } catch (error) {
         console.error("❌ Error fetching leaderboard:", error.response?.data || error.message);
