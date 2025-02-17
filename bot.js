@@ -1,38 +1,33 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, MessageFlags } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const axios = require("axios");
 
-// ✅ Logging environment variables to confirm they are loaded
 console.log("🔍 Checking environment variables...");
-["DISCORD_BOT_TOKEN", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK", "CLIENT_ID"].forEach((varName) => {
+["DISCORD_BOT_TOKEN", "STREAM_ELEMENTS_CHANNEL_ID", "LEADERBOARD_CHANNEL_ID", "DONATION_LINK"].forEach((varName) => {
     console.log(`${varName}:`, process.env[varName] ? "✅ Loaded" : "❌ Missing");
 });
 
 // ✅ Exit if required environment variables are missing
-if (!process.env.DISCORD_BOT_TOKEN || !process.env.CLIENT_ID) {
+if (!process.env.DISCORD_BOT_TOKEN || !process.env.STREAM_ELEMENTS_CHANNEL_ID || !process.env.LEADERBOARD_CHANNEL_ID) {
     console.error("❌ Missing required environment variables. Exiting...");
     process.exit(1);
 }
 
-// ✅ Ensure proper intents for Discord bot
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// ✅ Global Variables (Can Be Changed With Commands)
+// ✅ Restore API URL from `.env`
+const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/678d81945b43e4feb515e179/leaderboard`;
+
 let leaderboardChannelId = process.env.LEADERBOARD_CHANNEL_ID;
-let streamElementsApi = `https://api.streamelements.com/kappa/v2/tips/${process.env.STREAM_ELEMENTS_CHANNEL_ID}/leaderboard`;
 let updateInterval = 15 * 60 * 1000; // Default: 15 minutes
 let updateIntervalId = null;
 
-// ✅ Function to fetch leaderboard data from StreamElements
+// ✅ Fetch Leaderboard Data
 async function fetchLeaderboard() {
     try {
-        const response = await axios.get(streamElementsApi);
+        const response = await axios.get(STREAM_ELEMENTS_API);
         const leaderboard = response.data;
 
         if (!leaderboard || leaderboard.length === 0) {
@@ -45,7 +40,7 @@ async function fetchLeaderboard() {
             message += `\n**#${index + 1}** - ${entry.username}: $${entry.amount.toFixed(2)}`;
         });
 
-        message += `\n\n🌟 [Donate Here](${process.env.DONATION_LINK})`;
+        message += `\n\n[🌟 CLick To Tip](${process.env.DONATION_LINK})`;
         return message;
     } catch (error) {
         console.error("❌ Error fetching leaderboard:", error.response?.data || error.message);
@@ -53,7 +48,7 @@ async function fetchLeaderboard() {
     }
 }
 
-// ✅ Function to update leaderboard message
+// ✅ Update Leaderboard Message
 async function updateLeaderboardMessage() {
     try {
         const channel = await client.channels.fetch(leaderboardChannelId);
@@ -78,101 +73,69 @@ async function updateLeaderboardMessage() {
     }
 }
 
-// ✅ Slash Commands Setup
+// ✅ Register Slash Commands
 const commands = [
     new SlashCommandBuilder()
-        .setName('start')
-        .setDescription('Set leaderboard updates to every 5 minutes.'),
-    
+        .setName("start")
+        .setDescription("Set leaderboard updates to every 5 minutes."),
     new SlashCommandBuilder()
-        .setName('stop')
-        .setDescription('Set leaderboard updates back to every 15 minutes.'),
-
+        .setName("stop")
+        .setDescription("Set leaderboard updates back to every 15 minutes."),
     new SlashCommandBuilder()
-        .setName('setleaderboard')
-        .setDescription('Set the channel where the leaderboard updates.')
-        .addChannelOption(option =>
-            option.setName('channel')
-                .setDescription('The leaderboard channel')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('setapi')
-        .setDescription('Set the StreamElements API URL.')
-        .addStringOption(option =>
-            option.setName('apiurl')
-                .setDescription('The new StreamElements API URL')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('help')
-        .setDescription('List all available commands.')
+        .setName("help")
+        .setDescription("Show available bot commands."),
 ];
 
-// ✅ Register Slash Commands
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
-(async () => {
+
+async function registerCommands() {
     try {
-        console.log("🚀 Registering slash commands...");
+        console.log("🔄 Registering slash commands...");
         await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
         console.log("✅ Slash commands registered!");
     } catch (error) {
-        console.error("❌ Failed to register commands:", error);
+        console.error("❌ Failed to register slash commands:", error);
     }
-})();
+}
 
 // ✅ Bot Ready Event
 client.once("ready", async () => {
     console.log(`✅ Logged in as ${client.user.tag}!`);
     console.log("✅ Default Leaderboard updates every 15 minutes.");
+    await registerCommands();
     updateLeaderboardMessage();
     updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
 });
 
 // ✅ Slash Command Handling
 client.on("interactionCreate", async (interaction) => {
-    if (!interaction.isCommand()) return;
+    if (!interaction.isChatInputCommand()) return;
 
-    const { commandName } = interaction;
+    switch (interaction.commandName) {
+        case "start":
+            if (updateIntervalId) clearInterval(updateIntervalId);
+            updateInterval = 5 * 60 * 1000;
+            updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
+            await interaction.reply({ content: "✅ Leaderboard updates set to **every 5 minutes**.", ephemeral: true });
+            break;
 
-    if (commandName === "start") {
-        clearInterval(updateIntervalId);
-        updateInterval = 5 * 60 * 1000; // Set to 5 minutes
-        updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
-        await interaction.reply({ content: "✅ Leaderboard updates set to **every 5 minutes**.", flags: MessageFlags.Ephemeral });
-    }
+        case "stop":
+            if (updateIntervalId) clearInterval(updateIntervalId);
+            updateInterval = 15 * 60 * 1000;
+            updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
+            await interaction.reply({ content: "✅ Leaderboard updates set **back to every 15 minutes**.", ephemeral: true });
+            break;
 
-    if (commandName === "stop") {
-        clearInterval(updateIntervalId);
-        updateInterval = 15 * 60 * 1000; // Back to 15 minutes
-        updateIntervalId = setInterval(updateLeaderboardMessage, updateInterval);
-        await interaction.reply({ content: "✅ Leaderboard updates set **back to every 15 minutes**.", flags: MessageFlags.Ephemeral });
-    }
-
-    if (commandName === "setleaderboard") {
-        const channel = interaction.options.getChannel("channel");
-        leaderboardChannelId = channel.id;
-        await interaction.reply({ content: `✅ Leaderboard channel set to <#${channel.id}>.`, flags: MessageFlags.Ephemeral });
-    }
-
-    if (commandName === "setapi") {
-        const apiUrl = interaction.options.getString("apiurl");
-        streamElementsApi = apiUrl;
-        await interaction.reply({ content: `✅ StreamElements API set to: ${apiUrl}\n🔗 [StreamElements API Docs](https://dev.streamelements.com/docs/api-docs/ae133ffaf8c1a-personal-access-using-jwt-secert-token-to-access-the-api)`, flags: MessageFlags.Ephemeral });
-    }
-
-    if (commandName === "help") {
-        await interaction.reply({
-            content: "**📜 Leaderboard Bot Commands:**\n" +
-                "`/start` - Update leaderboard every **5 minutes**\n" +
-                "`/stop` - Update leaderboard every **15 minutes (default)**\n" +
-                "`/setleaderboard [channel]` - Set the leaderboard update channel\n" +
-                "`/setapi [url]` - Set StreamElements API URL\n" +
-                "`/help` - Show this command list",
-            flags: MessageFlags.Ephemeral
-        });
+        case "help":
+            await interaction.reply({
+                content: "**📜 Leaderboard Bot Commands:**\n" +
+                    "`/start` - Update leaderboard every **5 minutes**\n" +
+                    "`/stop` - Update leaderboard every **15 minutes (default)**\n" +
+                    "`/help` - Show this command list",
+                ephemeral: true,
+            });
+            break;
     }
 });
 
-// ✅ Start the bot with the environment token
 client.login(process.env.DISCORD_BOT_TOKEN);
