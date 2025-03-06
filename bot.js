@@ -18,7 +18,7 @@ const client = new Client({
 });
 
 // ✅ Restore API URL from `.env`
-const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/678d81945b43e4feb515e179/leaderboard`;
+const STREAM_ELEMENTS_API = `https://api.streamelements.com/kappa/v2/tips/66558748a82871d4ece06bc7/leaderboard`;
 
 let leaderboardChannelId = process.env.LEADERBOARD_CHANNEL_ID;
 let updateInterval = 15 * 60 * 1000; // Default: 15 minutes
